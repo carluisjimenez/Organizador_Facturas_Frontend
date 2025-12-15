@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizador de Facturas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Organizador de Facturas</h1>
+        </header>
+
+        <!-- Tabla de grupos -->
+        <section class="groups-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Grupos de facturas</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-action btn-add-group" id="addGroupBtn" onclick="showAddGroupDialog()">Nuevo
+                        Grupo</button>
+                    <button class="btn-action btn-download-all" id="downloadAllBtn" onclick="downloadAllGroups()"
+                        disabled>Descargar Todos</button>
+                    <button class="btn-action btn-delete-all" id="deleteAllBtn" onclick="deleteAllGroups()"
+                        disabled>Eliminar Todos</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="groupsTable">
+                    <thead>
+                        <tr>
+                            <th>Nombre Grupo</th>
+                            <th>Cantidad de Archivos</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groupsTableBody">
+                        <!-- Los grupos se insertarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Zona de carga -->
+        <section class="upload-section">
+            <h2>Cargar Archivos</h2>
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p class="upload-text">Arrastra tus archivos ZIP o PDF aquí</p>
+                    <p class="upload-hint">o haz clic para seleccionar</p>
+                    <input type="file" id="fileInput" accept=".zip,.pdf" multiple hidden>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal para crear nuevo grupo -->
+    <div class="modal" id="addGroupModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Crear Nuevo Grupo</h2>
+                <button class="btn-close" onclick="closeAddGroupDialog()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 20px;">
+                    <label for="newGroupName" style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre del
+                        Grupo:</label>
+                    <input type="text" id="newGroupName" class="base-name-input"
+                        placeholder="Ingresa el nombre del grupo" style="width: 100%;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAddGroupDialog()">Cancelar</button>
+                <button class="btn-primary" onclick="createNewGroup()">Crear Grupo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Ver Grupo -->
+    <div class="modal" id="previewModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Ver Grupo</h2>
+                <button class="btn-close" id="closeModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-info"
+                    style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 1; padding-right: 15px;">
+                        <p style="margin-bottom: 5px;"><strong>Nombre del Grupo:</strong></p>
+                        <div id="groupNameContainer"
+                            style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                            <span id="previewGroupNameText"
+                                style="font-weight: bold; font-size: 1.1em; color: #2c3e50;"></span>
+                            <button id="editGroupNameBtn" onclick="enableEditGroupName()"
+                                style="padding: 5px 10px; font-size: 0.8em; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                Editar
+                            </button>
+                            <input type="text" id="previewGroupNameInput" class="base-name-input"
+                                style="display: none; width: 100%; padding: 8px; font-size: 1em;">
+                        </div>
+                    </div>
+                    <div style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;">
+                        <button class="btn-action margin-bottom-10" onclick="openSplitGroupModal()"
+                            style="font-size: 0.9em; padding: 6px 12px; margin-bottom: 5px; background-color: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer;">+
+                            Crear Nuevo Grupo</button>
+                        <p style="margin: 0; font-size: 0.9em;"><strong>Total:</strong> <span
+                                id="previewTotalPdfs"></span> PDFs</p>
+                    </div>
+                </div>
+                <!-- Separador de línea -->
+                <div style="border-bottom: 1px solid #eee; margin: 15px 0;"></div>
+
+                <div class="preview-zone" id="previewZone">
+                    <p class="preview-hint">Arrastra PDFs aquí para agregarlos al grupo</p>
+                    <p class="preview-hint" style="font-size: 0.9em; margin-top: 5px;">o haz clic para seleccionar</p>
+                    <input type="file" id="previewFileInput" accept=".pdf" multiple hidden>
+                </div>
+                <div class="pdfs-list" id="pdfsList">
+                    <!-- Los PDFs se mostrarán aquí -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelPreview">Cancelar</button>
+                <button class="btn-primary" id="savePreview">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Mover PDF -->
+    <div class="modal" id="movePdfModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Mover PDF</h2>
+                <button class="btn-close" onclick="closeMovePdfModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="moveGroupSearch" class="base-name-input" placeholder="Buscar grupo..."
+                        style="width: 100%; padding: 10px;">
+                </div>
+                <div class="groups-list-container"
+                    style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;">
+                    <ul id="moveGroupsList" style="list-style: none; padding: 0; margin: 0;">
+                        <!-- Los grupos se poblarán aquí -->
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeMovePdfModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Crear Nuevo Grupo desde Selección (Dividir) -->
+    <div class="modal" id="splitGroupModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Crear Nuevo Grupo y Mover Archivos</h2>
+                <button class="btn-close" onclick="closeSplitGroupModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 20px;">
+                    <label for="splitGroupName" style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre del
+                        Nuevo Grupo:</label>
+                    <input type="text" id="splitGroupName" class="base-name-input"
+                        placeholder="Ingresa el nombre del nuevo grupo" style="width: 100%; padding: 10px;">
+                </div>
+
+                <p style="margin-bottom: 10px; font-weight: 500; font-size: 0.95em;">Selecciona los archivos para mover
+                    al nuevo grupo:</p>
+                <div class="groups-list-container"
+                    style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; padding: 10px;">
+                    <ul id="splitGroupPdfList" style="list-style: none; padding: 0; margin: 0;">
+                        <!-- PDFs del grupo actual se mostrarán aquí -->
+                    </ul>
+                </div>
+                <p id="splitGroupCount" style="text-align: right; margin-top: 10px; font-size: 0.9em; color: #666;">0
+                    archivos seleccionados</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSplitGroupModal()">Cancelar</button>
+                <button class="btn-primary" onclick="createSplitGroup()">Crear Grupo y Mover</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/js/main.js"></script>
+</body>
+
+</html>
