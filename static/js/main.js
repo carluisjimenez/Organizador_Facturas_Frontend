@@ -7,7 +7,7 @@ let state = {
     pdfToMoveIndex: null,
     pdfsToMoveToNewGroup: new Set(), // Almacena IDs o índices
     sessionId: null,
-    apiBaseUrl: 'http://localhost:5000' // URL base del backend
+    apiBaseUrl: 'https://organizadorfacturasbe.onrender.com'
 };
 
 // Elementos del DOM
