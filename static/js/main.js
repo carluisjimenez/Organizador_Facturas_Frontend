@@ -7,7 +7,12 @@ let state = {
     pdfToMoveIndex: null,
     pdfsToMoveToNewGroup: new Set(), // Almacena IDs o índices
     sessionId: null,
-    apiBaseUrl: 'https://organizadorfacturasbe.onrender.com'
+    apiBaseUrl: 'https://organizadorfacturasbe.onrender.com',
+    backendActivation: {
+        timerInterval: null,
+        inactivityTimeout: null,
+        isActivated: false
+    }
 };
 
 // Elementos del DOM
@@ -205,6 +210,9 @@ async function handleAnalyze(file) {
         }
 
         const data = await response.json();
+
+        // Reset inactivity timer since we successfully talked to backend
+        resetInactivityTimer();
 
         // Mantener grupos manuales y agregar nuevos grupos organizados
         const manualGroups = state.groups.filter(g => g.created_by === 'manual');
@@ -649,6 +657,9 @@ async function saveGroup(group, pdfs) {
 
     const updatedGroup = await response.json();
 
+    // Reset inactivity timer
+    resetInactivityTimer();
+
     // Actualizar el grupo en el estado local
     const groupIndex = state.groups.findIndex(g => g.id === group.id);
     if (groupIndex !== -1) {
@@ -691,6 +702,9 @@ async function downloadGroup(groupId) {
         }
 
         const blob = await response.blob();
+
+        // Reset inactivity timer
+        resetInactivityTimer();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1003,6 +1017,10 @@ async function createNewGroup() {
         }
 
         const newGroup = await response.json();
+
+        // Reset inactivity timer
+        resetInactivityTimer();
+
         newGroup.created_by = 'manual'; // Marcar como creado manualmente
         state.groups.push(newGroup);
         renderGroupsTable();
@@ -1310,4 +1328,94 @@ async function createSplitGroup() {
         console.error('Error al dividir grupo:', error);
         showMessage(error.message || 'Error al procesar la solicitud', 'error');
     }
+}
+
+// Backend Activation Logic
+function activateBackend() {
+    const btn = document.getElementById('activateBtn');
+    const timerSpan = document.getElementById('activationTimer');
+
+    if (!btn) return;
+
+    // 1. Send HTTP request
+    // We don't await this because we want to start the countdown immediately
+    // and the backend might take 50s to respond.
+    fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
+        .then(() => console.log('Backend wake-up successful'))
+        .catch(err => console.log('Backend wake-up ping error (expected if spinning up):', err));
+
+    // 2. Change UI to "Activando"
+    btn.textContent = 'Activando';
+    btn.className = 'btn-action btn-activating';
+    btn.disabled = true;
+
+    // 3. Show Timer
+    if (timerSpan) {
+        timerSpan.style.display = 'inline';
+        let secondsLeft = 60;
+        timerSpan.textContent = `${secondsLeft}s`;
+
+        // Clear any existing intervals
+        if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
+
+        state.backendActivation.timerInterval = setInterval(() => {
+            secondsLeft--;
+            timerSpan.textContent = `${secondsLeft}s`;
+
+            if (secondsLeft <= 0) {
+                clearInterval(state.backendActivation.timerInterval);
+                setBackendActivatedState();
+            }
+        }, 1000);
+    } else {
+        // Fallback if timer span missing
+        setTimeout(setBackendActivatedState, 60000);
+    }
+}
+
+function setBackendActivatedState() {
+    const btn = document.getElementById('activateBtn');
+    const timerSpan = document.getElementById('activationTimer');
+
+    if (!btn) return;
+
+    // Change to "Activado"
+    btn.textContent = 'Activado';
+    btn.className = 'btn-action btn-activated';
+    btn.disabled = true;
+
+    // Hide timer
+    if (timerSpan) timerSpan.style.display = 'none';
+
+    state.backendActivation.isActivated = true;
+
+    // Start inactivity timer (15 min)
+    resetInactivityTimer();
+}
+
+function resetInactivityTimer() {
+    // Only track interactivity if we are already activated
+    if (!state.backendActivation.isActivated) return;
+
+    if (state.backendActivation.inactivityTimeout) {
+        clearTimeout(state.backendActivation.inactivityTimeout);
+    }
+
+    // 15 minutes = 15 * 60 * 1000 = 900000 ms
+    state.backendActivation.inactivityTimeout = setTimeout(() => {
+        resetBackendActivationState();
+    }, 15 * 60 * 1000);
+}
+
+function resetBackendActivationState() {
+    const btn = document.getElementById('activateBtn');
+
+    if (!btn) return;
+
+    btn.textContent = 'Activar';
+    btn.className = 'btn-action btn-activate';
+    btn.disabled = false;
+
+    state.backendActivation.isActivated = false;
+    state.backendActivation.inactivityTimeout = null;
 }

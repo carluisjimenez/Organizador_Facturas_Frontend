@@ -256,6 +256,50 @@ tbody tr:nth-child(even) {
     box-shadow: 0 6px 20px rgba(230, 126, 34, 0.3);
 }
 
+/* Botón de activación backend */
+.btn-activate {
+    background: linear-gradient(135deg, #f1c40f, #f39c12);
+    color: white;
+    box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3);
+}
+
+.btn-activate:hover {
+    background: linear-gradient(135deg, #f39c12, #d35400);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(241, 196, 15, 0.4);
+}
+
+.btn-activating {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    color: white;
+    cursor: not-allowed;
+    opacity: 0.9;
+    box-shadow: none;
+    transform: none !important;
+}
+
+.btn-activated {
+    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+    color: white;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none !important;
+}
+
+.activation-timer {
+    font-weight: 700;
+    color: #e67e22;
+    font-size: 1.1em;
+    margin-right: 10px;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 /* Sección de Carga */
 .upload-section {
     text-align: center;
