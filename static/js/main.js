@@ -43,6 +43,7 @@ const editGroupNameBtn = document.getElementById('editGroupNameBtn');
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
+    checkBackendStatus(); // Verificar estado al cargar
 });
 
 // Inicializar event listeners
@@ -1392,36 +1393,80 @@ async function createSplitGroup() {
 }
 
 // Backend Activation Logic
+
+/**
+ * Verifica si el backend está despierto con un timeout corto
+ */
+async function checkBackendStatus() {
+    const btn = document.getElementById('activateBtn');
+    if (!btn) return;
+
+    // Hint: si estaba activado hace menos de 15 min, podemos ser optimistas
+    const lastActivation = sessionStorage.getItem('lastActivationTime');
+    const isRecent = lastActivation && (Date.now() - parseInt(lastActivation) < 15 * 60 * 1000);
+
+    if (isRecent) {
+        setBackendActivatedState();
+    }
+
+    try {
+        // Intentar un ping rápido (2.5 segundos de timeout)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+        const response = await fetch(`${state.apiBaseUrl}/`, {
+            method: 'GET',
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+            setBackendActivatedState();
+        } else if (isRecent) {
+            // Si el ping falló pero pensábamos que era reciente, volvemos a estado inicial
+            resetBackendActivationState();
+        }
+    } catch (err) {
+        console.log('Backend parece estar dormido');
+        if (isRecent) resetBackendActivationState();
+    }
+}
+
 function activateBackend() {
     const btn = document.getElementById('activateBtn');
     const timerSpan = document.getElementById('activationTimer');
 
     if (!btn) return;
 
-    // 1. Send HTTP request
-    // We don't await this because we want to start the countdown immediately
-    // and the backend might take 50s to respond.
-    fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
-        .then(() => console.log('Backend wake-up successful'))
-        .catch(err => console.log('Backend wake-up ping error (expected if spinning up):', err));
-
-    // 2. Change UI to "Activando"
+    // 1. Cambiar UI a "Activando"
     btn.textContent = 'Activando';
     btn.className = 'btn-action btn-activating';
     btn.disabled = true;
 
-    // 3. Show Timer
+    // 2. Mostrar Timer y empezar cuenta regresiva
     if (timerSpan) {
         timerSpan.style.display = 'inline';
         let secondsLeft = 60;
         timerSpan.textContent = `${secondsLeft}s`;
 
-        // Clear any existing intervals
         if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
 
         state.backendActivation.timerInterval = setInterval(() => {
             secondsLeft--;
             timerSpan.textContent = `${secondsLeft}s`;
+
+            // Cada 5 segundos, intentar un ping para ver si ya despertó
+            if (secondsLeft % 5 === 0 && secondsLeft > 0) {
+                fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
+                    .then(res => {
+                        if (res.ok) {
+                            clearInterval(state.backendActivation.timerInterval);
+                            setBackendActivatedState();
+                        }
+                    })
+                    .catch(() => { /* Sigue dormido */ });
+            }
 
             if (secondsLeft <= 0) {
                 clearInterval(state.backendActivation.timerInterval);
@@ -1429,9 +1474,14 @@ function activateBackend() {
             }
         }, 1000);
     } else {
-        // Fallback if timer span missing
+        // Fallback si no hay span de timer
         setTimeout(setBackendActivatedState, 60000);
     }
+
+    // 3. Mandar el ping inicial de wake-up
+    fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
+        .then(() => console.log('Ping de activación enviado'))
+        .catch(err => console.log('Backend despertando...'));
 }
 
 function setBackendActivatedState() {
@@ -1440,29 +1490,37 @@ function setBackendActivatedState() {
 
     if (!btn) return;
 
-    // Change to "Activado"
+    // Cambiar a "Activado"
     btn.textContent = 'Activado';
     btn.className = 'btn-action btn-activated';
     btn.disabled = true;
 
-    // Hide timer
+    // Ocultar timer si estaba visible
     if (timerSpan) timerSpan.style.display = 'none';
+    if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
 
     state.backendActivation.isActivated = true;
 
-    // Start inactivity timer (15 min)
+    // Guardar en sessionStorage para persistencia al refrescar
+    sessionStorage.setItem('backendActivated', 'true');
+    sessionStorage.setItem('lastActivationTime', Date.now().toString());
+
+    // Iniciar temporizador de inactividad
     resetInactivityTimer();
 }
 
 function resetInactivityTimer() {
-    // Only track interactivity if we are already activated
-    if (!state.backendActivation.isActivated) return;
+    // Si no está marcado como activado pero acabamos de tener éxito con el backend, lo activamos
+    if (!state.backendActivation.isActivated) {
+        setBackendActivatedState();
+        return;
+    }
 
     if (state.backendActivation.inactivityTimeout) {
         clearTimeout(state.backendActivation.inactivityTimeout);
     }
 
-    // 15 minutes = 15 * 60 * 1000 = 900000 ms
+    // 15 minutos de inactividad antes de volver a "Activar"
     state.backendActivation.inactivityTimeout = setTimeout(() => {
         resetBackendActivationState();
     }, 15 * 60 * 1000);
@@ -1470,7 +1528,6 @@ function resetInactivityTimer() {
 
 function resetBackendActivationState() {
     const btn = document.getElementById('activateBtn');
-
     if (!btn) return;
 
     btn.textContent = 'Activar';
@@ -1479,4 +1536,8 @@ function resetBackendActivationState() {
 
     state.backendActivation.isActivated = false;
     state.backendActivation.inactivityTimeout = null;
+
+    // Limpiar storage
+    sessionStorage.removeItem('backendActivated');
+    sessionStorage.removeItem('lastActivationTime');
 }
