@@ -1032,51 +1032,48 @@ async function createNewGroup() {
     }
 }
 
-// Descargar todos los grupos
+// Descargar todos los grupos como un solo ZIP
 async function downloadAllGroups() {
     if (state.groups.length === 0) {
         showMessage('No hay grupos para descargar', 'error');
         return;
     }
 
+    if (!state.sessionId) {
+        showMessage('No hay una sesión activa para descargar', 'error');
+        return;
+    }
+
     try {
-        showMessage('Descargando grupos...', 'info');
+        showMessage('Preparando descarga de todas las facturas...', 'info');
 
-        // Descargar cada grupo uno por uno
-        for (let i = 0; i < state.groups.length; i++) {
-            const group = state.groups[i];
+        const response = await fetch(`${state.apiBaseUrl}/api/download-all?session_id=${state.sessionId}`, {
+            method: 'GET'
+        });
 
-            try {
-                const response = await fetch(`${state.apiBaseUrl}/api/download/${group.id}`, {
-                    method: 'GET'
-                });
-
-                if (!response.ok) {
-                    console.error(`Error al descargar grupo ${group.baseName}`);
-                    continue;
-                }
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${group.baseName}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-
-                // Pequeña pausa entre descargas para evitar problemas del navegador
-                await new Promise(resolve => setTimeout(resolve, 300));
-            } catch (error) {
-                console.error(`Error al descargar grupo ${group.baseName}:`, error);
-            }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al descargar todas las facturas');
         }
 
-        showMessage(`Se descargaron ${state.groups.length} grupo(s) correctamente`, 'success');
+        const blob = await response.blob();
+
+        // Reset inactivity timer
+        resetInactivityTimer();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `facturas_organizadas.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showMessage(`Facturas descargadas correctamente en un archivo ZIP`, 'success');
     } catch (error) {
-        console.error('Error al descargar grupos:', error);
-        showMessage('Error al descargar los grupos. Por favor, intenta de nuevo.', 'error');
+        console.error('Error al descargar ZIP:', error);
+        showMessage(error.message || 'Error al descargar el archivo ZIP. Por favor, intenta de nuevo.', 'error');
     }
 }
 
