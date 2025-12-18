@@ -52,7 +52,7 @@
         <section class="upload-section">
             <h2>Cargar Archivos</h2>
             <div class="upload-zone" id="uploadZone">
-                <div class="upload-content">
+                <div class="upload-content" id="uploadContent">
                     <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="17 8 12 3 7 8"></polyline>
@@ -61,6 +61,10 @@
                     <p class="upload-text">Arrastra tus archivos ZIP o PDF aquí</p>
                     <p class="upload-hint">o haz clic para seleccionar</p>
                     <input type="file" id="fileInput" accept=".zip,.pdf" multiple hidden>
+                </div>
+                <div class="processing-overlay" id="processingOverlay" style="display: none;">
+                    <div class="spinner"></div>
+                    <p class="processing-text">Procesando archivos...</p>
                 </div>
             </div>
         </section>

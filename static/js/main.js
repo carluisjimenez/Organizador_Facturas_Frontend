@@ -23,6 +23,8 @@ const previewModal = document.getElementById('previewModal');
 const closeModal = document.getElementById('closeModal');
 const cancelPreview = document.getElementById('cancelPreview');
 const savePreview = document.getElementById('savePreview');
+const processingOverlay = document.getElementById('processingOverlay');
+const uploadContent = document.getElementById('uploadContent');
 
 const previewTotalPdfs = document.getElementById('previewTotalPdfs');
 const previewZone = document.getElementById('previewZone');
@@ -139,22 +141,71 @@ async function handleDrop(e) {
     e.stopPropagation();
     uploadZone.classList.remove('dragover');
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        const validFiles = Array.from(files).filter(file => {
-            const fileName = file.name.toLowerCase();
-            const isValidExtension = fileName.endsWith('.zip') || fileName.endsWith('.pdf');
-            const isValidMime = file.type === 'application/zip' ||
-                file.type === 'application/x-zip-compressed' ||
-                file.type === 'application/pdf' ||
-                file.type === '';
-            return isValidExtension || isValidMime;
-        });
+    const items = e.dataTransfer.items;
+    if (items && items.length > 0) {
+        showLoading();
+        try {
+            const files = [];
 
-        if (validFiles.length > 0) {
-            await handleAnalyzeMultiple(validFiles);
-        } else {
-            showMessage('Por favor, arrastra archivos ZIP o PDF válidos', 'error');
+            // Función recursiva para recorrer entradas de archivos/directorios
+            async function traverseEntry(entry) {
+                if (entry.isFile) {
+                    const file = await new Promise((resolve) => entry.file(resolve));
+                    const fileName = file.name.toLowerCase();
+                    if (fileName.endsWith('.pdf') || fileName.endsWith('.zip')) {
+                        files.push(file);
+                    }
+                } else if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    const readAllEntries = async () => {
+                        const entries = await new Promise((resolve) => reader.readEntries(resolve));
+                        if (entries.length > 0) {
+                            for (const subEntry of entries) {
+                                await traverseEntry(subEntry);
+                            }
+                            await readAllEntries(); // Seguir leyendo por si hay más de 100 entries
+                        }
+                    };
+                    await readAllEntries();
+                }
+            }
+
+            // Procesar todos los items arrastrados
+            const traversePromises = [];
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i].webkitGetAsEntry();
+                if (entry) {
+                    traversePromises.push(traverseEntry(entry));
+                }
+            }
+
+            await Promise.all(traversePromises);
+
+            if (files.length > 0) {
+                await handleAnalyzeMultiple(files);
+            } else {
+                showMessage('No se encontraron archivos PDF o ZIP válidos', 'error');
+            }
+        } catch (error) {
+            console.error('Error al procesar archivos arrastrados:', error);
+            showMessage('Error al procesar los archivos', 'error');
+        } finally {
+            hideLoading();
+        }
+    } else {
+        // Fallback para navegadores que no soportan DataTransferItem
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const validFiles = Array.from(files).filter(file => {
+                const fileName = file.name.toLowerCase();
+                return fileName.endsWith('.zip') || fileName.endsWith('.pdf');
+            });
+
+            if (validFiles.length > 0) {
+                showLoading();
+                await handleAnalyzeMultiple(validFiles);
+                hideLoading();
+            }
         }
     }
 }
@@ -173,7 +224,9 @@ async function handleFileSelect(e) {
         });
 
         if (validFiles.length > 0) {
+            showLoading();
             await handleAnalyzeMultiple(validFiles);
+            hideLoading();
         } else {
             showMessage('Por favor, selecciona archivos ZIP o PDF válidos', 'error');
         }
@@ -250,6 +303,17 @@ async function handleAnalyzeMultiple(files) {
     } else {
         showMessage('No se pudo analizar ningún archivo', 'error');
     }
+}
+
+// Funciones para mostrar/ocultar estados de carga
+function showLoading() {
+    if (processingOverlay) processingOverlay.style.display = 'flex';
+    if (uploadContent) uploadContent.style.visibility = 'hidden';
+}
+
+function hideLoading() {
+    if (processingOverlay) processingOverlay.style.display = 'none';
+    if (uploadContent) uploadContent.style.visibility = 'visible';
 }
 
 
