@@ -1401,18 +1401,19 @@ async function checkBackendStatus() {
     const btn = document.getElementById('activateBtn');
     if (!btn) return;
 
-    // Hint: si estaba activado hace menos de 15 min, podemos ser optimistas
-    const lastActivation = sessionStorage.getItem('lastActivationTime');
+    // Usar localStorage para que persista entre pestañas y al cerrar el navegador
+    const lastActivation = localStorage.getItem('lastActivationTime');
     const isRecent = lastActivation && (Date.now() - parseInt(lastActivation) < 15 * 60 * 1000);
 
     if (isRecent) {
+        // Estado optimista: si fue hace poco, asumimos que sigue despierto
         setBackendActivatedState();
     }
 
     try {
-        // Intentar un ping rápido (2.5 segundos de timeout)
+        // Verificar realmente con el backend
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
         const response = await fetch(`${state.apiBaseUrl}/`, {
             method: 'GET',
@@ -1424,12 +1425,18 @@ async function checkBackendStatus() {
         if (response.ok) {
             setBackendActivatedState();
         } else if (isRecent) {
-            // Si el ping falló pero pensábamos que era reciente, volvemos a estado inicial
+            // Si el ping falla (e.g. 404 o 500) pero pensábamos que era reciente, 
+            // quizás el servidor se apagó antes de tiempo o hay un error.
             resetBackendActivationState();
         }
     } catch (err) {
-        console.log('Backend parece estar dormido');
-        if (isRecent) resetBackendActivationState();
+        // Solo reseteamos si no logramos hacer el ping y ha pasado tiempo o es un error real
+        console.log('Backend no respondió al ping inicial');
+        // Si el ping falla totalmente (Aborted o Network Error), 
+        // y NO estamos en el margen de "reciente", nos aseguramos de que esté desactivado.
+        if (!isRecent) {
+            resetBackendActivationState();
+        }
     }
 }
 
@@ -1501,16 +1508,20 @@ function setBackendActivatedState() {
 
     state.backendActivation.isActivated = true;
 
-    // Guardar en sessionStorage para persistencia al refrescar
-    sessionStorage.setItem('backendActivated', 'true');
-    sessionStorage.setItem('lastActivationTime', Date.now().toString());
+    // Guardar en localStorage para persistencia total
+    localStorage.setItem('backendActivated', 'true');
+    localStorage.setItem('lastActivationTime', Date.now().toString());
 
     // Iniciar temporizador de inactividad
     resetInactivityTimer();
 }
 
 function resetInactivityTimer() {
-    // Si no está marcado como activado pero acabamos de tener éxito con el backend, lo activamos
+    // Actualizar el timestamp en localStorage cada vez que hay actividad
+    // Esto evita que al refrescar la página se pierda el estado si han pasado > 15 min 
+    // desde el click original pero el usuario ha estado activo
+    localStorage.setItem('lastActivationTime', Date.now().toString());
+
     if (!state.backendActivation.isActivated) {
         setBackendActivatedState();
         return;
@@ -1537,7 +1548,7 @@ function resetBackendActivationState() {
     state.backendActivation.isActivated = false;
     state.backendActivation.inactivityTimeout = null;
 
-    // Limpiar storage
-    sessionStorage.removeItem('backendActivated');
-    sessionStorage.removeItem('lastActivationTime');
+    // Limpiar storage permanente
+    localStorage.removeItem('backendActivated');
+    localStorage.removeItem('lastActivationTime');
 }
