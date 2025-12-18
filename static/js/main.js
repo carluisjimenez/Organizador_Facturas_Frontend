@@ -275,7 +275,7 @@ async function handleAnalyze(file) {
         state.sessionId = data.session_id;
 
         renderGroupsTable();
-        showMessage('Archivo analizado correctamente', 'success');
+        showMessage('Archivos analizados correctamente', 'success');
     } catch (error) {
         console.error('Error al analizar:', error);
         showMessage(error.message || 'Error al analizar el archivo. Por favor, intenta de nuevo.', 'error');
@@ -300,7 +300,7 @@ async function handleAnalyzeMultiple(files) {
     }
 
     if (processedCount > 0) {
-        showMessage(`${processedCount} archivo(s) analizado(s) correctamente`, 'success');
+        showMessage('Archivos analizados correctamente', 'success');
     } else {
         showMessage('No se pudo analizar ningún archivo', 'error');
     }
@@ -858,7 +858,14 @@ function editBaseName(groupId) {
         nameText.style.display = 'none';
         editContainer.style.display = 'flex';
         nameInput.focus();
-        nameInput.select();
+        requestAnimationFrame(() => {
+            try {
+                const len = nameInput.value.length;
+                nameInput.setSelectionRange(len, len);
+            } catch (e) {
+                // ignore
+            }
+        });
 
         // Añadir event listener para Enter y Escape
         nameInput.addEventListener('keydown', function (event) {
@@ -1220,6 +1227,7 @@ function enableEditGroupName() {
         editGroupNameBtn.style.display = 'none';
         previewGroupNameInput.style.display = 'block';
         previewGroupNameInput.focus();
+        previewGroupNameInput.setSelectionRange(0, 0);
     }
 }
 
@@ -1463,17 +1471,15 @@ function activateBackend() {
             secondsLeft--;
             timerSpan.textContent = `${secondsLeft}s`;
 
-            // Cada 5 segundos, intentar un ping para ver si ya despertó
-            if (secondsLeft % 5 === 0 && secondsLeft > 0) {
-                fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
-                    .then(res => {
-                        if (res.ok) {
-                            clearInterval(state.backendActivation.timerInterval);
-                            setBackendActivatedState();
-                        }
-                    })
-                    .catch(() => { /* Sigue dormido */ });
-            }
+            // Cada segundo, intentar un ping para ver si ya despertó
+            fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
+                .then(res => {
+                    if (res.ok) {
+                        clearInterval(state.backendActivation.timerInterval);
+                        setBackendActivatedState();
+                    }
+                })
+                .catch(() => { /* Sigue dormido */ });
 
             if (secondsLeft <= 0) {
                 clearInterval(state.backendActivation.timerInterval);
