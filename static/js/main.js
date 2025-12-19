@@ -25,6 +25,7 @@ const cancelPreview = document.getElementById('cancelPreview');
 const savePreview = document.getElementById('savePreview');
 const processingOverlay = document.getElementById('processingOverlay');
 const uploadContent = document.getElementById('uploadContent');
+const serviceOverlay = document.getElementById('serviceOverlay');
 
 const previewTotalPdfs = document.getElementById('previewTotalPdfs');
 const previewZone = document.getElementById('previewZone');
@@ -43,7 +44,7 @@ const editGroupNameBtn = document.getElementById('editGroupNameBtn');
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
-    checkBackendStatus(); // Verificar estado al cargar
+    ensureBackendAwake(); // Despertar backend automáticamente al cargar
 });
 
 // Inicializar event listeners
@@ -1400,161 +1401,45 @@ async function createSplitGroup() {
     }
 }
 
-// Backend Activation Logic
-
-/**
- * Verifica si el backend está despierto con un timeout corto
- */
-async function checkBackendStatus() {
-    const btn = document.getElementById('activateBtn');
-    if (!btn) return;
-
-    // Usar localStorage para que persista entre pestañas y al cerrar el navegador
-    const lastActivation = localStorage.getItem('lastActivationTime');
-    const isRecent = lastActivation && (Date.now() - parseInt(lastActivation) < 15 * 60 * 1000);
-
-    if (isRecent) {
-        // Estado optimista: si fue hace poco, asumimos que sigue despierto
-        setBackendActivatedState();
-    }
-
+async function pingBackend(timeoutMs = 2000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        // Verificar realmente con el backend
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-
-        const response = await fetch(`${state.apiBaseUrl}/`, {
-            method: 'GET',
-            signal: controller.signal
-        });
-
+        await fetch(`${state.apiBaseUrl}/`, { method: 'GET', signal: controller.signal });
+        return true;
+    } catch (_) {
+        return false;
+    } finally {
         clearTimeout(timeoutId);
-
-        if (response.ok) {
-            setBackendActivatedState();
-        } else if (isRecent) {
-            // Si el ping falla (e.g. 404 o 500) pero pensábamos que era reciente, 
-            // quizás el servidor se apagó antes de tiempo o hay un error.
-            resetBackendActivationState();
-        }
-    } catch (err) {
-        // Solo reseteamos si no logramos hacer el ping y ha pasado tiempo o es un error real
-        console.log('Backend no respondió al ping inicial');
-        // Si el ping falla totalmente (Aborted o Network Error), 
-        // y NO estamos en el margen de "reciente", nos aseguramos de que esté desactivado.
-        if (!isRecent) {
-            resetBackendActivationState();
-        }
     }
 }
 
-function activateBackend() {
-    const btn = document.getElementById('activateBtn');
-    const timerSpan = document.getElementById('activationTimer');
-
-    if (!btn) return;
-
-    // 1. Cambiar UI a "Activando"
-    btn.textContent = 'Activando';
-    btn.className = 'btn-action btn-activating';
-    btn.disabled = true;
-
-    // 2. Mostrar Timer y empezar cuenta regresiva
-    if (timerSpan) {
-        timerSpan.style.display = 'inline';
-        let secondsLeft = 60;
-        timerSpan.textContent = `${secondsLeft}s`;
-
-        if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
-
-        state.backendActivation.timerInterval = setInterval(() => {
-            secondsLeft--;
-            timerSpan.textContent = `${secondsLeft}s`;
-
-            // Cada segundo, intentar un ping para ver si ya despertó
-            fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
-                .then(res => {
-                    if (res.ok) {
-                        clearInterval(state.backendActivation.timerInterval);
-                        setBackendActivatedState();
-                    }
-                })
-                .catch(() => { /* Sigue dormido */ });
-
-            if (secondsLeft <= 0) {
-                clearInterval(state.backendActivation.timerInterval);
-                setBackendActivatedState();
-            }
-        }, 1000);
-    } else {
-        // Fallback si no hay span de timer
-        setTimeout(setBackendActivatedState, 60000);
-    }
-
-    // 3. Mandar el ping inicial de wake-up
-    fetch(`${state.apiBaseUrl}/`, { method: 'GET' })
-        .then(() => console.log('Ping de activación enviado'))
-        .catch(err => console.log('Backend despertando...'));
-}
-
-function setBackendActivatedState() {
-    const btn = document.getElementById('activateBtn');
-    const timerSpan = document.getElementById('activationTimer');
-
-    if (!btn) return;
-
-    // Cambiar a "Activado"
-    btn.textContent = 'Activado';
-    btn.className = 'btn-action btn-activated';
-    btn.disabled = true;
-
-    // Ocultar timer si estaba visible
-    if (timerSpan) timerSpan.style.display = 'none';
-    if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
-
-    state.backendActivation.isActivated = true;
-
-    // Guardar en localStorage para persistencia total
-    localStorage.setItem('backendActivated', 'true');
-    localStorage.setItem('lastActivationTime', Date.now().toString());
-
-    // Iniciar temporizador de inactividad
-    resetInactivityTimer();
-}
-
-function resetInactivityTimer() {
-    // Actualizar el timestamp en localStorage cada vez que hay actividad
-    // Esto evita que al refrescar la página se pierda el estado si han pasado > 15 min 
-    // desde el click original pero el usuario ha estado activo
-    localStorage.setItem('lastActivationTime', Date.now().toString());
-
-    if (!state.backendActivation.isActivated) {
-        setBackendActivatedState();
+async function ensureBackendAwake() {
+    const isAwake = await pingBackend(2000);
+    if (isAwake) {
+        state.backendActivation.isActivated = true;
         return;
     }
 
-    if (state.backendActivation.inactivityTimeout) {
-        clearTimeout(state.backendActivation.inactivityTimeout);
-    }
+    if (serviceOverlay) serviceOverlay.style.display = 'flex';
 
-    // 15 minutos de inactividad antes de volver a "Activar"
-    state.backendActivation.inactivityTimeout = setTimeout(() => {
-        resetBackendActivationState();
-    }, 15 * 60 * 1000);
+    const attemptWake = async () => {
+        const ok = await pingBackend(2000);
+        if (ok) {
+            state.backendActivation.isActivated = true;
+            localStorage.setItem('lastActivationTime', Date.now().toString());
+            if (serviceOverlay) serviceOverlay.style.display = 'none';
+            if (state.backendActivation.timerInterval) {
+                clearInterval(state.backendActivation.timerInterval);
+                state.backendActivation.timerInterval = null;
+            }
+        }
+    };
+
+    if (state.backendActivation.timerInterval) clearInterval(state.backendActivation.timerInterval);
+    state.backendActivation.timerInterval = setInterval(attemptWake, 5000);
 }
 
-function resetBackendActivationState() {
-    const btn = document.getElementById('activateBtn');
-    if (!btn) return;
-
-    btn.textContent = 'Activar';
-    btn.className = 'btn-action btn-activate';
-    btn.disabled = false;
-
-    state.backendActivation.isActivated = false;
-    state.backendActivation.inactivityTimeout = null;
-
-    // Limpiar storage permanente
-    localStorage.removeItem('backendActivated');
-    localStorage.removeItem('lastActivationTime');
+function resetInactivityTimer() {
+    localStorage.setItem('lastActivationTime', Date.now().toString());
 }

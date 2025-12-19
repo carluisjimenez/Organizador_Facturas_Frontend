@@ -22,8 +22,6 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="margin: 0;">Grupos de facturas</h2>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <span id="activationTimer" class="activation-timer" style="display: none;">60s</span>
-                    <button class="btn-action btn-activate" id="activateBtn" onclick="activateBackend()">Activar</button>
                     <button class="btn-action btn-add-group" id="addGroupBtn" onclick="showAddGroupDialog()">Nuevo
                         Grupo</button>
                     <button class="btn-action btn-download-all" id="downloadAllBtn" onclick="downloadAllGroups()"
@@ -204,6 +202,12 @@
                 <button class="btn-primary" onclick="createSplitGroup()">Crear Grupo y Mover</button>
             </div>
         </div>
+    </div>
+
+    <!-- Overlay de carga de servicio -->
+    <div class="service-overlay" id="serviceOverlay" style="display: none;">
+        <div class="spinner"></div>
+        <p class="service-text">Cargando servicio...</p>
     </div>
 
     <script src="static/js/main.js"></script>
